@@ -14,6 +14,7 @@ from collections import deque
 from typing import Deque, Iterator, Optional
 
 from .config import WhaleDetectorConfig
+from .profiler import profile_id_for
 from .types import Side, Trade, WhaleEvent, WhalePrint
 
 log = logging.getLogger(__name__)
@@ -66,8 +67,8 @@ class WhaleDetector:
 
 
 class _OpenCluster:
-    __slots__ = ("symbol", "side", "min_prints", "prints", "notional", "vwap_num", "vwap_den",
-                 "first_ms", "last_ms")
+    __slots__ = ("symbol", "side", "min_prints", "prints", "notional", "vwap_num",
+                 "vwap_den", "first_ms", "last_ms", "min_print", "max_print")
 
     def __init__(self, symbol: str, side: Side, min_prints: int) -> None:
         self.symbol = symbol
@@ -79,6 +80,8 @@ class _OpenCluster:
         self.vwap_den = 0.0
         self.first_ms = 0
         self.last_ms = 0
+        self.min_print = float("inf")
+        self.max_print = 0.0
 
     def add(self, p: WhalePrint) -> None:
         if not self.prints:
@@ -88,11 +91,15 @@ class _OpenCluster:
         self.vwap_num += p.trade.price * p.trade.amount
         self.vwap_den += p.trade.amount
         self.last_ms = p.trade.ts_ms
+        if p.notional_usd < self.min_print:
+            self.min_print = p.notional_usd
+        if p.notional_usd > self.max_print:
+            self.max_print = p.notional_usd
 
     def close(self) -> Optional[WhaleEvent]:
         if len(self.prints) < self.min_prints or self.vwap_den <= 0:
             return None
-        return WhaleEvent(
+        ev = WhaleEvent(
             symbol=self.symbol,
             side=self.side,
             start_ms=self.first_ms,
@@ -101,7 +108,11 @@ class _OpenCluster:
             notional_usd=self.notional,
             prints=len(self.prints),
             cohort_id=_cohort_for(self.notional),
+            min_print_notional=0.0 if self.min_print == float("inf") else self.min_print,
+            max_print_notional=self.max_print,
         )
+        ev.profile_id = profile_id_for(ev)
+        return ev
 
 
 def _cohort_for(notional_usd: float) -> str:

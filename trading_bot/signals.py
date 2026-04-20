@@ -19,7 +19,11 @@ class SignalEngine:
         self.tracker = tracker
 
     def from_event(self, ev: WhaleEvent) -> Optional[Signal]:
-        stats = self.tracker.cohort_quality(ev.cohort_id, ev.symbol)
+        source = "profile"
+        stats = self.tracker.profile_quality(ev.profile_id)
+        if stats is None or not stats.get("qualified"):
+            source = "cohort"
+            stats = self.tracker.cohort_quality(ev.cohort_id, ev.symbol)
         if stats is None or not stats.get("qualified"):
             return None
         if stats["win_rate"] < self.cfg.min_win_rate:
@@ -29,13 +33,14 @@ class SignalEngine:
         strength = min(1.0, max(0.0,
             (stats["win_rate"] - self.cfg.min_win_rate) / max(1e-6, 1.0 - self.cfg.min_win_rate)
         ))
+        label = ev.profile_id if source == "profile" else ev.cohort_id
         return Signal(
             symbol=ev.symbol,
             side=ev.side,
             strength=strength,
             created_ms=int(time.time() * 1000),
             ttl_s=self.cfg.signal_ttl_s,
-            reason=(f"cohort={ev.cohort_id} wr={stats['win_rate']:.2f} "
+            reason=(f"{source}={label} wr={stats['win_rate']:.2f} "
                     f"exp={stats['expectancy_bps']:.1f}bps n={stats['total']}"),
             expectancy_bps=stats["expectancy_bps"],
         )

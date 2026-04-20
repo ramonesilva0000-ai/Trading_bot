@@ -11,7 +11,10 @@ from dotenv import load_dotenv
 
 from trading_bot.backtest import run_backtest
 from trading_bot.config import Config
+from trading_bot.exchange import Exchange
 from trading_bot.logger import setup_logging
+from trading_bot.recommend import recommend_for_profile
+from trading_bot.risk import RiskManager
 from trading_bot.runtime import Runtime
 from trading_bot.storage import Store
 
@@ -86,6 +89,113 @@ def cohorts(
             )
     finally:
         store.close()
+
+
+@app.command()
+def traders(
+    config: Path = typer.Option("config.yaml", help="Path to config YAML."),
+    limit: int = typer.Option(10, help="Number of profiles to show."),
+    equity: float = typer.Option(
+        0.0,
+        help="Account equity in USD for the sizing recommendation. "
+             "0 = fetch from exchange balance.",
+    ),
+    mark_symbol: str = typer.Option(
+        "",
+        help="Symbol used to fetch a reference mark for the sizing preview. "
+             "Defaults to the profile's most-traded pair.",
+    ),
+) -> None:
+    """Rank trader profiles and report lot/notional ranges and suggested size."""
+    import asyncio
+
+    load_dotenv()
+    cfg = Config.load(config)
+    setup_logging(cfg.logging.level, cfg.logging.file)
+    store = Store(cfg.storage.path)
+    exchange = Exchange(cfg.exchange)
+    risk = RiskManager(cfg.risk)
+
+    async def _run() -> None:
+        try:
+            eq = equity
+            if eq <= 0:
+                try:
+                    eq = await exchange.fetch_balance_usd()
+                except Exception:  # noqa: BLE001
+                    eq = 0.0
+            if eq <= 0:
+                eq = 10_000.0  # sensible default for the preview
+
+            rows = store.top_profiles(
+                min_events=cfg.whale_tracker.min_events_for_scoring,
+                limit=limit,
+            )
+            if not rows:
+                typer.echo(
+                    "No qualified profiles yet. Let the bot observe the tape until "
+                    f"each profile has >= {cfg.whale_tracker.min_events_for_scoring} "
+                    "settled events."
+                )
+                return
+
+            hdr = (f"{'profile':<12} {'pairs (top 3)':<40} {'lot $':<22} "
+                   f"{'trade $':<22} {'skew':<9} {'n':>4} {'wr':>6} "
+                   f"{'exp':>8} {'rec':<16}")
+            typer.echo(hdr)
+            typer.echo("-" * len(hdr))
+            for r in rows:
+                pairs = r["pairs"][:3]
+                pairs_s = ", ".join(f"{p['symbol']}({p['events']})" for p in pairs) or "-"
+                lot_s = f"{_fmt_usd(r['lot_notional_min'])}-{_fmt_usd(r['lot_notional_max'])}"
+                nt_s = f"{_fmt_usd(r['trade_notional_min'])}-{_fmt_usd(r['trade_notional_max'])}"
+                skew = f"B{r['buy_pct']*100:3.0f}/S{(1-r['buy_pct'])*100:3.0f}"
+
+                ref = mark_symbol or (pairs[0]["symbol"] if pairs else "")
+                mark = 0.0
+                if ref:
+                    try:
+                        mark = await exchange.fetch_ticker_price(ref)
+                    except Exception:  # noqa: BLE001
+                        mark = 0.0
+                rec_s = "-"
+                if mark > 0:
+                    rec = recommend_for_profile(
+                        profile_stats=r, mark=mark, equity_usd=eq,
+                        risk=risk, signals_cfg=cfg.signals,
+                    )
+                    if rec.approved:
+                        rec_s = (f"{rec.equity_pct*100:.1f}% / "
+                                 f"{_fmt_usd(rec.usd_notional)}")
+                    else:
+                        rec_s = f"skip:{rec.reason[:10]}"
+
+                typer.echo(
+                    f"{r['profile_id']:<12} {pairs_s[:40]:<40} "
+                    f"{lot_s:<22} {nt_s:<22} {skew:<9} "
+                    f"{r['total']:>4} {r['win_rate']*100:>5.1f}% "
+                    f"{r['expectancy_bps']:>7.1f}b {rec_s:<16}"
+                )
+            typer.echo("")
+            typer.echo(
+                f"equity used for recommendation: ${eq:,.2f} | "
+                f"caps: pos {cfg.risk.max_position_pct*100:.1f}% / "
+                f"gross {cfg.risk.max_gross_exposure_pct*100:.1f}% / "
+                f"kelly x{cfg.risk.kelly_fraction}"
+            )
+        finally:
+            await exchange.close()
+            store.close()
+
+    asyncio.run(_run())
+
+
+def _fmt_usd(x: float) -> str:
+    if x >= 1_000_000:
+        return f"${x/1_000_000:.1f}M"
+    if x >= 1_000:
+        return f"${x/1_000:.0f}k"
+    return f"${x:.0f}"
 
 
 if __name__ == "__main__":

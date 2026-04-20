@@ -31,18 +31,23 @@ WS ──► Exchange ──► WhaleDetector ──► size-bucket ──► Si
    notional clears `min_notional_usd` and clusters consecutive same-side
    prints into a single event. Events are bucketed by total notional
    (`base` / `large` / `super` / `mega`).
-3. **Store** (`trading_bot/storage.py`) persists events, fills, and rolling
-   cohort statistics in SQLite.
-4. **WhaleTracker** (`trading_bot/whale_tracker.py`) revisits every stored
+3. **Profiler** (`trading_bot/profiler.py`) fingerprints each event by
+   `size-bucket @ UTC-time-bucket`, giving a stable trader-profile id that
+   aggregates across pairs and sides.
+4. **Store** (`trading_bot/storage.py`) persists events, fills, and rolling
+   cohort + profile statistics in SQLite.
+5. **WhaleTracker** (`trading_bot/whale_tracker.py`) revisits every stored
    event after `evaluation_horizon_h` hours, measures the signed move in
-   bps from event VWAP, and updates win-rate + expectancy per cohort.
-5. **SignalEngine** (`trading_bot/signals.py`) emits a `Signal` only for
-   events whose cohort passes `min_win_rate`, `min_expectancy_bps`, and
-   `min_events_for_scoring`.
-6. **RiskManager** (`trading_bot/risk.py`) sizes positions using fractional
+   bps from event VWAP, and updates win-rate + expectancy for both the
+   cohort and the trader profile.
+6. **SignalEngine** (`trading_bot/signals.py`) emits a `Signal` only for
+   events whose **profile** passes `min_win_rate`, `min_expectancy_bps`,
+   and `min_events_for_scoring`. Falls back to the coarser cohort when a
+   profile has not yet been seen enough times.
+7. **RiskManager** (`trading_bot/risk.py`) sizes positions using fractional
    Kelly, caps per-position and gross exposure, sets stop/target in bps,
    and halts trading after a configured daily drawdown.
-7. **Executor** (`trading_bot/executor.py`) places `market` or post-only
+8. **Executor** (`trading_bot/executor.py`) places `market` or post-only
    `limit` orders with slippage caps and retries; enforces stops/targets on
    each mark refresh. `dry_run: true` keeps everything paper.
 
@@ -59,12 +64,35 @@ cp .env.example .env
 # paper-trade on Binance testnet:
 python main.py live
 
-# inspect learned cohort stats:
+# rank top trader profiles with pairs, lot/notional ranges, win-rate,
+# expectancy, and a concrete size recommendation for your account:
+python main.py traders --limit 10 --equity 10000
+
+# inspect coarse cohort stats (size-bucket only):
 python main.py cohorts
 
 # replay a historical trade CSV (columns: ts_ms,symbol,price,amount,side):
 python main.py backtest data/trades.csv
 ```
+
+### `traders` output
+
+Each row is a behavioral trader profile (size bucket × UTC time-of-day
+bucket), aggregated across every pair in which it has fired:
+
+```
+profile      pairs (top 3)                     lot $            trade $             skew      n   wr     exp      rec
+500k@12h     BTC/USDT(142), ETH/USDT(58), ...  $260k-$480k      $520k-$1.2M         B 58/S42  230  63.4%   8.4b    1.8% / $180
+```
+
+- **pairs**: the symbols this profile actually trades, ordered by event count.
+- **lot $**: min/max single-print notional observed for this profile.
+- **trade $**: min/max clustered-event notional (one whale "trade" = one burst).
+- **skew**: share of events that were aggressor-buy vs aggressor-sell.
+- **n / wr / exp**: settled events, win-rate on the horizon, expectancy in bps.
+- **rec**: what the configured `RiskManager` would approve for *your* account
+  if this profile fired a signal right now — shown as % of equity and USD
+  notional. If the cap chain blocks it, you'll see `skip:<reason>`.
 
 Every runtime parameter lives in `config.yaml`. Swap exchanges by changing
 `exchange.id` to any ccxt id (`binance`, `binanceusdm`, `bybit`, `okx`,

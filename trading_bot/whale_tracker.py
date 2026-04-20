@@ -49,17 +49,23 @@ class WhaleTracker:
         loss = move_bps <= -self.cfg.loss_threshold_bps
         self.store.settle_event(event_id, move_bps, win, loss)
         self.store.bump_cohort(ev.cohort_id, ev.symbol, move_bps, win, loss)
+        self.store.bump_profile(ev.profile_id, move_bps, win, loss)
         log.info(
-            "settled event=%s cohort=%s sym=%s side=%s move=%.1fbps win=%s loss=%s",
-            event_id, ev.cohort_id, ev.symbol, ev.side.value, move_bps, win, loss,
+            "settled event=%s profile=%s cohort=%s sym=%s side=%s move=%.1fbps win=%s loss=%s",
+            event_id, ev.profile_id, ev.cohort_id, ev.symbol, ev.side.value,
+            move_bps, win, loss,
         )
 
     def cohort_quality(self, cohort_id: str, symbol: str) -> Optional[dict]:
         stats = self.store.cohort_stats(cohort_id, symbol)
         if stats is None:
             return None
-        if stats["total"] < self.cfg.min_events_for_scoring:
-            stats["qualified"] = False
-        else:
-            stats["qualified"] = True
+        stats["qualified"] = stats["total"] >= self.cfg.min_events_for_scoring
+        return stats
+
+    def profile_quality(self, profile_id: str) -> Optional[dict]:
+        stats = self.store.profile_stats(profile_id)
+        if stats is None:
+            return None
+        stats["qualified"] = stats["total"] >= self.cfg.min_events_for_scoring
         return stats

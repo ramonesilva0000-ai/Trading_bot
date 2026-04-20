@@ -53,6 +53,9 @@ class WhaleEvent:
     notional_usd: float
     prints: int
     cohort_id: str = "default"
+    profile_id: str = "default"
+    min_print_notional: float = 0.0
+    max_print_notional: float = 0.0
     outcome_bps: Optional[float] = None  # realized move in bps (signed by side)
     evaluated: bool = False
 
