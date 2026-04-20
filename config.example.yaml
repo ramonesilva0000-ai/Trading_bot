@@ -1,0 +1,73 @@
+# Whale-tracking trading bot configuration
+# Copy to config.yaml and fill in your values. API keys come from .env.
+
+exchange:
+  # Any ccxt exchange id: binance, binanceusdm, bybit, okx, kraken, coinbase, kucoin, bitget, etc.
+  id: binance
+  # spot | future (USDT-M perpetuals) | margin
+  market_type: spot
+  testnet: true
+  rate_limit_ms: 50
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT
+
+whale_detector:
+  # A trade is considered a "whale print" if its notional is >= this USD amount.
+  min_notional_usd: 250000
+  # Rolling window (seconds) used when clustering prints into a whale event.
+  cluster_window_s: 5
+  # Absolute minimum number of whale prints needed to fire a cluster event.
+  min_cluster_prints: 1
+
+whale_tracker:
+  # How long (hours) after a whale event to measure realized outcome.
+  evaluation_horizon_h: 4
+  # Favorable move threshold (in bps) that counts as a "win".
+  win_threshold_bps: 40
+  # Loss threshold (in bps) that counts as a "loss".
+  loss_threshold_bps: 40
+  # Minimum number of events required before a whale cohort is considered reliable.
+  min_events_for_scoring: 20
+
+signals:
+  # Only follow whale cohorts with win-rate above this threshold.
+  min_win_rate: 0.60
+  # Require the cohort's expectancy (bps per trade) to exceed this.
+  min_expectancy_bps: 5.0
+  # Time-to-live (seconds) for a generated signal before it is discarded.
+  signal_ttl_s: 60
+
+risk:
+  # Max fraction of account equity deployed into a single position.
+  max_position_pct: 0.05
+  # Max fraction of account equity held across all open positions.
+  max_gross_exposure_pct: 0.40
+  # Fractional Kelly scaler (0..1). 0.25 = quarter-Kelly (recommended).
+  kelly_fraction: 0.25
+  # Hard stop-loss in bps from entry.
+  stop_loss_bps: 80
+  # Take-profit in bps from entry.
+  take_profit_bps: 120
+  # Max daily drawdown (fraction of equity) before trading halts for the day.
+  daily_drawdown_halt_pct: 0.03
+  # Max leverage (futures only).
+  max_leverage: 3
+
+execution:
+  # market | limit_postonly
+  order_type: limit_postonly
+  # Slippage cap (bps) for market orders.
+  max_slippage_bps: 15
+  # Retry attempts on transient order errors.
+  retries: 3
+  dry_run: true
+
+storage:
+  path: data/whales.sqlite
+
+logging:
+  level: INFO
+  file: logs/bot.log
