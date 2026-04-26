@@ -1,0 +1,109 @@
+:root {
+  --bg: #0b0d11;
+  --bg-2: #11151c;
+  --card: #161b24;
+  --line: #232a36;
+  --text: #e7ecf3;
+  --muted: #8a93a3;
+  --accent: #5cc8ff;
+  --green: #4ade80;
+  --red: #f87171;
+  --warn: #fbbf24;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  min-height: 100vh; overscroll-behavior-y: none; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: env(safe-area-inset-top, 0) 16px 0 16px;
+  height: calc(56px + env(safe-area-inset-top, 0px));
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+.dot.ok { background: var(--green); }
+.dot.warn { background: var(--warn); }
+.status-pill {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--bg-2); color: var(--muted); border: 1px solid var(--line);
+}
+.status-pill.on { color: var(--green); border-color: rgba(74,222,128,.4); }
+
+main {
+  padding: 12px 12px calc(80px + env(safe-area-inset-bottom, 0px)) 12px;
+  max-width: 720px; margin: 0 auto;
+}
+
+.tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 10;
+}
+.tab {
+  appearance: none; border: 0; background: transparent; color: var(--muted);
+  font: inherit; padding: 14px 0; cursor: pointer;
+}
+.tab.active { color: var(--accent); }
+
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px; margin: 0 0 12px 0;
+}
+.card h2 { margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em; }
+
+.metric { display: flex; justify-content: space-between; padding: 6px 0;
+  border-bottom: 1px dashed var(--line); }
+.metric:last-child { border-bottom: 0; }
+.metric .label { color: var(--muted); }
+.metric .value { font-variant-numeric: tabular-nums; }
+.value.up { color: var(--green); }
+.value.down { color: var(--red); }
+
+.row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+button.primary, button.danger, button.ghost {
+  appearance: none; border: 1px solid var(--line);
+  background: var(--bg-2); color: var(--text);
+  border-radius: var(--radius); padding: 12px;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+button.primary { background: #1f3a5a; border-color: #2b5582; color: var(--accent); }
+button.danger  { background: #3a1f23; border-color: #6b2a31; color: var(--red); }
+button.ghost   { background: transparent; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+.profile-row, .event-row {
+  border-bottom: 1px solid var(--line); padding: 10px 0;
+}
+.profile-row:last-child, .event-row:last-child { border-bottom: 0; }
+.profile-head { display: flex; justify-content: space-between; align-items: baseline; }
+.profile-id { font-weight: 600; }
+.exp.pos { color: var(--green); }
+.exp.neg { color: var(--red); }
+.kvs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
+  margin-top: 6px; font-size: 13px; }
+.kvs .k { color: var(--muted); }
+.kvs .v { font-variant-numeric: tabular-nums; text-align: right; }
+.pairs { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+.empty { color: var(--muted); text-align: center; padding: 24px 8px; }
+.error { color: var(--red); font-size: 13px; padding: 8px 0; }
+
+.input { width: 100%; padding: 12px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: var(--bg-2); color: var(--text);
+  font: inherit; }
+label.field { display: block; margin: 0 0 12px 0; }
+label.field .lbl { display: block; color: var(--muted); font-size: 12px;
+  margin-bottom: 6px; }
+
+.refresh { color: var(--muted); font-size: 12px; text-align: right;
+  margin-top: 4px; }

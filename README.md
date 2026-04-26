@@ -73,7 +73,70 @@ python main.py cohorts
 
 # replay a historical trade CSV (columns: ts_ms,symbol,price,amount,side):
 python main.py backtest data/trades.csv
+
+# serve the mobile PWA + REST/WebSocket API for phone control:
+python main.py api --host 0.0.0.0 --port 8787
 ```
+
+## Phone app (PWA)
+
+A trading bot **cannot run reliably on a phone** — iOS suspends backgrounded
+apps within seconds and Android is fragile under battery saver / network
+loss. This repo solves it the right way: the bot runs somewhere stable
+(VPS, Raspberry Pi, your laptop, or Termux on Android) and the phone is the
+control surface, installed as a Progressive Web App.
+
+What the app shows:
+
+- **Dashboard** — equity, free margin, day PnL, mode (paper / live), open
+  positions with live mark and bps PnL, Start / Stop controls.
+- **Traders** — top trader profiles with their pairs, lot-size and
+  trade-notional ranges, side skew, win-rate, expectancy, and the exact
+  USD notional + %-of-equity the RiskManager would approve for *your*
+  account if the profile fired right now.
+- **Events** — recent whale events with realized bps outcomes, plus your
+  recent fills.
+- **Settings** — API key (must match the server's `API_KEY` env var),
+  preview equity, current server config.
+
+### Run the bot somewhere reliable
+
+```bash
+# on your VPS / Pi / laptop / Termux:
+export API_KEY=$(openssl rand -hex 24)   # required for any non-loopback bind
+python main.py api --host 0.0.0.0 --port 8787
+```
+
+### Install the app on your phone
+
+1. On the same network as the host, open `http://<host-ip>:8787/` in
+   Safari (iOS) or Chrome (Android).
+2. **iOS**: Share → *Add to Home Screen*.
+   **Android**: ⋮ menu → *Install app*.
+3. Open the bot from your home screen, paste the `API_KEY` into Settings,
+   and tap Save.
+
+### Exposing it over the public internet (optional)
+
+Always front it with HTTPS (Cloudflare Tunnel, Caddy, Nginx + Let's Encrypt,
+or Tailscale). Never expose `--host 0.0.0.0` on a public IP without TLS and
+a strong `API_KEY` — the API can place real orders when `dry_run: false`.
+
+### Running the bot on the phone itself (Android-only, advanced)
+
+Termux can run the Python stack directly on Android:
+
+```bash
+pkg install python git rust
+git clone <this-repo> && cd Trading_bot
+pip install -r requirements.txt
+termux-wake-lock                         # keep CPU awake
+python main.py api --host 127.0.0.1 --port 8787
+```
+
+Then install the PWA from `http://127.0.0.1:8787/` in the same phone's
+browser. Expect the OS to kill the process if you close Termux, lose signal,
+or hit aggressive battery saver — this is not a substitute for a VPS or Pi.
 
 ### `traders` output
 
@@ -125,7 +188,10 @@ trading_bot/
   runtime.py          async orchestration
   logger.py           logging setup
   types.py            shared domain types
-main.py               CLI (live | backtest | cohorts)
+  api.py              FastAPI HTTP + WebSocket layer
+  recommend.py        translate a profile into a sizing recommendation
+main.py               CLI (live | backtest | cohorts | traders | api)
+web/                  mobile-first PWA (HTML/CSS/JS, manifest, service worker)
 tests/                unit tests
 ```
 

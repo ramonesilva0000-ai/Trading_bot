@@ -198,5 +198,32 @@ def _fmt_usd(x: float) -> str:
     return f"${x:.0f}"
 
 
+@app.command()
+def api(
+    config: Path = typer.Option("config.yaml", help="Path to config YAML."),
+    host: str = typer.Option("0.0.0.0",
+                             help="Bind host. 0.0.0.0 to access from your phone on LAN."),
+    port: int = typer.Option(8787, help="Bind port."),
+) -> None:
+    """Run the HTTP+WebSocket API and serve the mobile PWA."""
+    import os
+    import uvicorn
+    from trading_bot.api import create_app
+
+    load_dotenv()
+    cfg = Config.load(config)
+    setup_logging(cfg.logging.level, cfg.logging.file)
+
+    if not os.getenv("API_KEY", "").strip() and host != "127.0.0.1":
+        typer.echo(
+            "WARNING: API_KEY is unset and you are binding to a non-loopback host. "
+            "Anyone on the network can control the bot. Set API_KEY in .env "
+            "before exposing this beyond localhost.",
+            err=True,
+        )
+    typer.echo(f"open the app on your phone: http://<this-host>:{port}/")
+    uvicorn.run(create_app(cfg), host=host, port=port, log_config=None)
+
+
 if __name__ == "__main__":
     app()
